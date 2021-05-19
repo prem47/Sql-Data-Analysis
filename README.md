@@ -1,2 +1,2 @@
 # Sql-Data-Analysis
-Analyzing Covid data using SQL.
+Analyzing Covid data using Postgresql.
