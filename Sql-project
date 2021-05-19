@@ -1,0 +1,138 @@
+-- Taking a look at the data
+-- -- Since the data also includes continent we use 'WHERE' to filter it out
+SELECT *
+FROM PUBLIC.covid_affected
+WHERE continent IS NOT NULL;
+
+SELECT *
+FROM PUBLIC.covid_vaccination
+WHERE continent IS NOT NULL;
+
+-- Sum of cases and deaths Globally
+SELECT SUM(total_cases) AS Cases_Reported,SUM(total_deaths) AS Deaths_Reported
+FROM PUBLIC.covid_affected
+WHERE country='World';
+
+
+
+-- Investigating Percentage of Population Affected
+-- -- As both 'population' and 'total_cases' are integer datatype, integer division truncates the result towards zero.To get the accurate results we cast 'total_cases' to float
+SELECT country,date_d,population,total_cases,(total_cases::float/population)*100 as PercentageOfPopulationAffected
+FROM PUBLIC.covid_affected
+WHERE continent is NOT NULL;
+
+-- Countries With highest death rate
+SELECT country,(SUM(total_deaths)/SUM(total_cases))*100 as DeathRate
+FROM PUBLIC.covid_affected
+WHERE continent IS NOT NULL 
+GROUP BY country
+HAVING (SUM(total_deaths)/SUM(total_cases))*100 IS NOT NULL
+ORDER BY 2 desc;
+
+-- Running Total of cases in India
+SELECT country,date_d,
+       SUM(new_cases) OVER(PARTITION BY country ORDER BY date_d) AS running_total
+FROM PUBLIC.covid_affected
+WHERE country = 'India';
+
+-- Highest total in a month in Inida
+SELECT country,DATE_TRUNC('month',date_d),SUM(new_cases)
+FROM PUBLIC.covid_affected
+WHERE country='India' AND new_cases IS NOT NULL
+GROUP BY 1,2
+ORDER BY 3 DESC;
+
+-- Percentage of Population Vaccinated
+SELECT ca.country,ca.population,MAX((cv.people_vaccinated::float/ca.population))*100 percentageOfPopulationVaccinated
+FROM PUBLIC.covid_affected ca
+JOIN PUBLIC.covid_vaccination cv
+ON ca.iso_code=cv.iso_code
+WHERE ca.total_cases IS NOT NULL AND ca.continent IS NOT NULL AND cv.people_vaccinated IS NOT NULL
+GROUP BY 1,2
+ORDER BY 3 DESC;
+
+-- Last 10 days covid cases growth rate in India
+SELECT GrowthRate 
+FROM (SELECT total_cases,date_d,
+(total_cases::float-LEAD(total_cases,10) 
+OVER (ORDER BY date_d DESC))/LEAD(total_cases,10) 
+OVER (ORDER BY date_d DESC)*100 AS GrowthRate
+FROM PUBLIC.covid_affected
+WHERE country='India' 
+LIMIT 1) sub;
+
+
+-- Grouping the rate of spread in India
+SELECT new_cases,
+CASE 
+ WHEN new_cases >400000 THEN 'Fleeting'
+ WHEN new_cases BETWEEN 100000 AND 400000 THEN 'Rapid'
+ WHEN new_cases BETWEEN 10000 AND 100000 THEN 'Very High'
+ WHEN new_cases BETWEEN 1000 AND 10000 THEN 'High'
+ WHEN new_cases <1000 THEN 'Low'
+ END AS Rate_of_spread
+FROM PUBLIC.covid_affected
+WHERE country='India' AND new_cases IS NOT NULL;
+
+-- Average No. of Covid affected people in Top 5 spreading countries
+SELECT AVG(TotalCases)
+FROM (SELECT ca.country,SUM(total_cases) TotalCases
+      FROM covid_affected ca
+      JOIN covid_vaccination cv
+      ON ca.iso_code=cv.iso_code
+	  WHERE ca.continent IS NOT NULL AND ca.total_cases IS NOT NULL
+      GROUP BY ca.country
+	  ORDER BY TotalCases DESC
+	  LIMIT 5) sub;
+
+
+
+-- Percentile under which total_cases fall into
+SELECT country,date_d,total_cases,
+       NTILE(4) OVER (PARTITION BY country ORDER BY total_cases) AS Percentile
+FROM PUBLIC.covid_affected
+WHERE continent IS NOT NULL;
+
+
+-- Computing MEDIAN of New Covid Cases
+WITH t1 AS(SELECT total_cases
+FROM PUBLIC.covid_affected
+WHERE continent IS NOT NULL AND country='India')
+
+SELECT percentile_disc(0.5) within group (order by t1.total_cases) AS MEDIAN
+FROM t1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
